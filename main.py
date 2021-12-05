@@ -1,29 +1,67 @@
 import fileAnalysis
 import WebAnalysis
 import reader
+import markMail
 
-url='https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&cad=rja&uact=8&ved=2ahUKEwj2qeKn24v0AhVPQhoKHQ4-B4YQFnoECAIQAQ&url=https://www.rojadirectatv.tv/&usg=AOvVaw2JeSqCMmyc6XqKWymY4fJ1'
+url=''
 VTapiKey='fc06e14f7e9409d28771c645456c958477fb78eda4d89034bc1bde729827f2af'
 mailApiKey='AIzaSyAc2vZQS7QedPd0zfqRbd7MvSkT3FYgJ4o'
-
-
-#Comprobar que hay correos recibidos no leidos
-mailUnRead=reader.checkEmailUnRead()
-
+nMails=0
+contador=0
+contadorSpam=0
+analizarFichero=False
 #Comprobar que hay correos recibidos
 mailStored=reader.checkEmailStored()
 
+#Comprobar que hay correos recibidos no leidos
+mailUnRead=reader.checkEmailUnRead()
+print("El numero de correos a analizar son :"+repr(len(mailUnRead)))
 #Analisis direccion sender
-senderCheck=True
+if len(mailUnRead)>0:
+    for i in mailUnRead:
+        contador=contador+1
+        print("-----------------------")
+        print("\nAnalizando correo Nº"+repr(contador) +"\n")
+        sCheck=reader.senderCheck(i)
+        if sCheck != True:
+            print("  El correo de: "+ sCheck + " no es considerado valido, porque contiene parametros no aceptados")
+            # Marcar correo como spam
+            contadorSpam=contadorSpam+1
+            markMail.markSpam(sCheck)
+            print("  Marcando correo como SPAM")
+        else:
+            print("Correo sender valido. \nBuscando direcciones URL.......")
+            #Comprobar si los emails recibidos contienen una url
+            mailWeb=reader.checkEmailHasWeb(i)
+            if mailWeb == True:
+                print("  El email no contiene URL")
+            else:
+                # Analisis web
+                resultadoWeb = WebAnalysis.runWeb(VTapiKey, mailWeb)
+                if resultadoWeb != True:
+                    output = resultadoWeb.split('&&')
+                    print("Pagina web no segura" + repr(output))
+                    # Marcar como SPAM
+                    contadorSpam = contadorSpam + 1
+                    markMail.markSpamWeb(i)
+                    print("Marcando correo como SPAM")
+                else:
+                    analizarFichero=True
+                    print("Pagina segura.")
+            if mailWeb==True or analizarFichero==True:
+                print("Comprobando si el mail tiene archivos.....")
+                if reader.checkEmailhasFile(i) != True:
+                    fileTerminacion=fileAnalysis.fileAnalysis(i)
+                    ######Comprobar el Fichero por la terminacion
+                    if fileTerminacion == True:
+                        print("Este tipo de archivos esta permitido")
+                    else:
+                        contadorSpam=contadorSpam+1
+                        print("Terminacion no segura y marcando como SPAM")
+                        markMail.markSpam(i)
+                else:
+                    print("El email no contiene Ficheros")
 
-#Analisis web
-if url !='':
-    resultadoWeb=WebAnalysis.runWeb(VTapiKey,url)
-    if resultadoWeb == True:
-        print("Pagina segura")
-    else:
-        output=resultadoWeb.split('&&')
-        print(output)
 
-#Analisis Archivo
-
+print("\n\nLos resultados del Analisis son:\nCorreos detectados como peligrososo y marcados como spam:"+repr(contadorSpam))
+print("Correos seguros: "+repr(contador-contadorSpam))
